@@ -31,41 +31,6 @@ struct ContentView: View {
                 )
                 .ignoresSafeArea()
                 
-                // HUD Panels (using overlay alignment)
-                VStack {
-                    HStack {
-                        HudPanel(label: "S Y S T E M   T I M E", value: currentTime())
-                            .padding(20)
-                        Spacer()
-                        HudPanel(label: "D A T E", value: currentDate())
-                            .padding(20)
-                    }
-                    Spacer()
-                    HStack {
-                        StatusPanel()
-                            .padding(20)
-                        Spacer()
-                        HudPanel(label: "J . A . R . V . I . S .", value: "v3.7.1")
-                            .padding(20)
-                    }
-                }
-                
-                // Corner decorations
-                VStack {
-                    HStack {
-                        CornerMark()
-                        Spacer()
-                        CornerMark().rotationEffect(.degrees(90))
-                    }
-                    Spacer()
-                    HStack {
-                        CornerMark().rotationEffect(.degrees(270))
-                        Spacer()
-                        CornerMark().rotationEffect(.degrees(180))
-                    }
-                }
-                .padding(10)
-                
                 // Main content
                 VStack(spacing: 16) {
                     Spacer()
@@ -253,85 +218,6 @@ struct SettingsView: View {
 }
 
 // MARK: - HUD Components
-
-struct GridOverlay: View {
-    var body: some View {
-        Canvas { context, size in
-            let spacing: CGFloat = 40
-            for x in stride(from: 0, through: size.width, by: spacing) {
-                var path = Path()
-                path.move(to: CGPoint(x: x, y: 0))
-                path.addLine(to: CGPoint(x: x, y: size.height))
-                context.stroke(path, with: .color(Color.cyan.opacity(0.03)), lineWidth: 1)
-            }
-            for y in stride(from: 0, through: size.height, by: spacing) {
-                var path = Path()
-                path.move(to: CGPoint(x: 0, y: y))
-                path.addLine(to: CGPoint(x: size.width, y: y))
-                context.stroke(path, with: .color(Color.cyan.opacity(0.03)), lineWidth: 1)
-            }
-        }
-        .ignoresSafeArea()
-    }
-}
-
-struct CornerMark: View {
-    var body: some View {
-        ZStack {
-            Rectangle().fill(Color.cyan.opacity(0.3)).frame(width: 20, height: 1).offset(x: 10)
-            Rectangle().fill(Color.cyan.opacity(0.3)).frame(width: 1, height: 20).offset(y: 10)
-        }
-    }
-}
-
-struct StatusPanel: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("S Y S T E M   S T A T U S")
-                .font(.system(size: 9, design: .monospaced))
-                .foregroundColor(.cyan.opacity(0.4))
-            HStack(spacing: 6) {
-                Circle().fill(Color.green).frame(width: 6, height: 6)
-                    .shadow(color: .green.opacity(0.5), radius: 4)
-                Text("All Systems Online")
-                    .font(.system(size: 13, design: .monospaced))
-                    .foregroundColor(.green)
-            }
-        }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color.cyan.opacity(0.03))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cyan.opacity(0.1), lineWidth: 1))
-        )
-    }
-}
-
-struct HudPanel: View {
-    let label: String
-    let value: String
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label)
-                .font(.system(size: 9, design: .monospaced))
-                .foregroundColor(.cyan.opacity(0.4))
-            Text(value)
-                .font(.system(size: 14, design: .monospaced))
-                .monospacedDigit()
-                .foregroundColor(Color(red: 0.78, green: 0.94, blue: 1.0))
-                .animation(nil, value: value)
-        }
-        .padding(14)
-        .frame(minWidth: 140, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color.cyan.opacity(0.03))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cyan.opacity(0.1), lineWidth: 1))
-        )
-        .fixedSize()
-    }
-}
 
 #Preview {
     ContentView()
