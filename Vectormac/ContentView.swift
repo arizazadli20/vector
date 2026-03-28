@@ -108,23 +108,24 @@ struct ContentView: View {
                     }
                     
                     // Voice Button
-                    Button(action: { voiceEngine.toggleListening() }) {
-                        ZStack {
-                            Circle()
-                                .stroke(
-                                    voiceEngine.isListening ? Color.green : Color.cyan,
-                                    lineWidth: 2
-                                )
-                                .frame(width: 60, height: 60)
-                                .shadow(color: (voiceEngine.isListening ? Color.green : Color.cyan).opacity(0.3), radius: 10)
-                            
+                    Circle()
+                        .stroke(
+                            voiceEngine.isListening ? Color.green : Color.cyan,
+                            lineWidth: 2
+                        )
+                        .frame(width: 60, height: 60)
+                        .shadow(color: (voiceEngine.isListening ? Color.green : Color.cyan).opacity(0.3), radius: 10)
+                        .scaleEffect(voiceEngine.isListening ? 1.05 : 1.0)
+                        .overlay(
                             Image(systemName: voiceEngine.isListening ? "mic.fill" : "mic")
                                 .font(.title2)
                                 .foregroundColor(voiceEngine.isListening ? .green : .cyan)
+                        )
+                        .contentShape(Circle())
+                        .onTapGesture {
+                            voiceEngine.toggleListening()
                         }
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.top, 8)
+                        .padding(.top, 8)
                     
                     Spacer()
                 }
