@@ -17,24 +17,17 @@ class VoiceEngine: ObservableObject {
     @Published var transcript: [(role: String, text: String)] = []
     @Published var currentHearing = ""
     @Published var audioLevel: CGFloat = 0
-    
-    private var recognizer: SFSpeechRecognizer?
-    private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
-    private var recognitionTask: SFSpeechRecognitionTask?
-    private var audioEngine: AVAudioEngine?
-    private let brain = GroqBrain.shared
-    private let systemUtils = SystemUtils.shared
-    
-    private var silenceTimer: Timer?
-    private var maxTimer: Timer?
-    private var lastText = ""
+       private var audioRecorder: AVAudioRecorder?
+    private var levelTimer: Timer?
+    private var silenceDuration: TimeInterval = 0
     private var isProcessing = false
+    private var speakProcess: Process?
     
-    init() {
-        recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
-    }
+    private let tempAudioURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("jarvis_recording.m4a")
     
-    // MARK: - Speech (macOS say command)
+    init() { }
+    
+    // MARK: - Speech (macOS say)
     
     func speak(_ text: String) {
         DispatchQueue.main.async { [weak self] in
@@ -63,190 +56,197 @@ class VoiceEngine: ObservableObject {
     
     func toggleListening() {
         if isListening {
-            // If user taps to stop — use whatever was heard so far
-            let captured = lastText.trimmingCharacters(in: .whitespaces)
-            forceStop()
-            if !captured.isEmpty {
-                processCommand(captured)
-            }
+            stopRecordingAndProcess(manual: true)
         } else {
-            startListeningWithPermission()
+            startRecording()
         }
     }
     
-    // MARK: - Permission + Start
+    // MARK: - Recording & Silence Detection
     
-    private func startListeningWithPermission() {
+    private func startRecording() {
         guard !isProcessing else { return }
         
-        SFSpeechRecognizer.requestAuthorization { status in
-            DispatchQueue.main.async { [weak self] in
+        AVAudioApplication.requestRecordPermission { [weak self] granted in
+            DispatchQueue.main.async {
                 guard let self = self else { return }
-                if status == .authorized {
-                    self.beginRecognition()
+                if granted {
+                    self.beginRecordingSession()
                 } else {
-                    self.statusText = "MICROPHONE PERMISSION DENIED"
+                    self.statusText = "MICROPHONE DENIED"
                 }
             }
         }
     }
     
-    // MARK: - Core Recognition
-    
-    private func beginRecognition() {
-        forceStop()
+    private func beginRecordingSession() {
+        let settings: [String: Any] = [
+            AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
+            AVSampleRateKey: 16000,
+            AVNumberOfChannelsKey: 1,
+            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
+        ]
         
-        guard let recognizer = recognizer, recognizer.isAvailable else {
-            statusText = "SPEECH ENGINE NOT AVAILABLE"
-            return
-        }
-        
-        let engine = AVAudioEngine()
-        self.audioEngine = engine
-        
-        let request = SFSpeechAudioBufferRecognitionRequest()
-        request.shouldReportPartialResults = true
-        request.taskHint = .dictation
-        self.recognitionRequest = request
-        self.lastText = ""
-        
-        let inputNode = engine.inputNode
-        let fmt = inputNode.outputFormat(forBus: 0)
-        guard fmt.channelCount > 0 else {
-            statusText = "NO MICROPHONE DETECTED"
-            return
-        }
-        
-        // Tap audio to feed recognizer + compute level
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: fmt) { [weak self] buffer, _ in
-            self?.recognitionRequest?.append(buffer)
-            guard let data = buffer.floatChannelData?[0] else { return }
-            let frames = Int(buffer.frameLength)
-            var sum: Float = 0
-            for i in 0..<frames { sum += abs(data[i]) }
-            let avg = CGFloat(sum / Float(max(frames, 1))) * 10
-            DispatchQueue.main.async { self?.audioLevel = min(avg, 1.0) }
-        }
-        
-        // Recognition callback
-        recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
-            guard let self = self else { return }
-            
-            if let result = result {
-                let text = result.bestTranscription.formattedString.trimmingCharacters(in: .whitespaces)
-                guard !text.isEmpty else { return }
-                
-                DispatchQueue.main.async {
-                    self.currentHearing = text
-                    self.statusText = "HEARING: \(text)"
-                    self.lastText = text
-                    
-                    // Cancel previous silence timer and set new one
-                    self.silenceTimer?.invalidate()
-                    self.silenceTimer = Timer.scheduledTimer(withTimeInterval: 1.2, repeats: false) { [weak self] _ in
-                        guard let self = self, self.isListening, !self.isProcessing else { return }
-                        // Capture what was heard and process it
-                        let final = self.lastText
-                        self.forceStop()
-                        if !final.isEmpty {
-                            self.processCommand(final)
-                        }
-                    }
-                }
-            }
-        }
-        
-        engine.prepare()
         do {
-            try engine.start()
-        } catch {
-            statusText = "AUDIO ERROR: \(error.localizedDescription)"
-            forceStop()
-            return
-        }
-        
-        DispatchQueue.main.async {
-            self.isListening = true
-            self.statusText = "LISTENING"
-            self.currentHearing = ""
+            audioRecorder = try AVAudioRecorder(url: tempAudioURL, settings: settings)
+            audioRecorder?.isMeteringEnabled = true
+            audioRecorder?.prepareToRecord()
+            audioRecorder?.record()
             
-            // Safety valve: auto-stop after 15 seconds max
-            self.maxTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: false) { [weak self] _ in
-                guard let self = self, self.isListening else { return }
-                let final = self.lastText
-                self.forceStop()
-                if !final.isEmpty {
-                    self.processCommand(final)
-                } else {
-                    self.statusText = "STANDBY"
-                }
+            isListening = true
+            statusText = "LISTENING"
+            currentHearing = ""
+            silenceDuration = 0
+            
+            levelTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+                self?.monitorAudioLevel()
             }
+        } catch {
+            statusText = "MIC INIT FAILED"
         }
     }
     
-    // MARK: - Stop completely
+    private func monitorAudioLevel() {
+        guard let recorder = audioRecorder, recorder.isRecording else { return }
+        recorder.updateMeters()
+        
+        let power = recorder.averagePower(forChannel: 0) // range: -160 to 0
+        
+        // Power to 0.0 - 1.0 linear scale roughly
+        let level = CGFloat(max(0, power + 50) / 50)
+        self.audioLevel = min(level * 2, 1.0)
+        
+        if power < -35 {
+            silenceDuration += 0.1
+            if silenceDuration > 1.5 { // 1.5 seconds of silence
+                stopRecordingAndProcess(manual: false)
+            }
+        } else {
+            silenceDuration = 0 // User is talking
+        }
+    }
     
-    private func forceStop() {
-        silenceTimer?.invalidate()
-        silenceTimer = nil
-        maxTimer?.invalidate()
-        maxTimer = nil
+    private func stopRecordingAndProcess(manual: Bool) {
+        guard isListening else { return }
+        
+        levelTimer?.invalidate()
+        levelTimer = nil
+        audioRecorder?.stop()
         isListening = false
         audioLevel = 0
         
-        audioEngine?.stop()
-        audioEngine?.inputNode.removeTap(onBus: 0)
-        audioEngine = nil
-        
-        recognitionRequest?.endAudio()
-        recognitionRequest = nil
-        recognitionTask?.cancel()
-        recognitionTask = nil
+        processRecording()
     }
     
     func stopListening() {
-        forceStop()
+        levelTimer?.invalidate()
+        levelTimer = nil
+        audioRecorder?.stop()
+        isListening = false
+        audioLevel = 0
         if !isProcessing { statusText = "STANDBY" }
     }
     
-    // MARK: - Process & Ask Groq
+    // MARK: - Process Audio via Groq Whisper
     
-    private func processCommand(_ text: String) {
-        guard !isProcessing, !text.isEmpty else { return }
+    private func processRecording() {
+        guard !isProcessing else { return }
         isProcessing = true
-        
-        DispatchQueue.main.async {
-            self.statusText = "PROCESSING..."
-            self.transcript.append((role: "user", text: text))
-            self.currentHearing = ""
-        }
+        statusText = "TRANSCRIBING..."
         
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
             
-            // Local command check first
-            if let localResponse = self.systemUtils.handleCommand(text) {
-                DispatchQueue.main.async { self.statusText = "THINKING" }
-                Thread.sleep(forTimeInterval: 0.3)
-                self.speak(localResponse)
-                return
+            let transcript = self.transcribeWithWhisperSync()
+            guard !transcript.isEmpty else {
+                DispatchQueue.main.async {
+                    self.statusText = "STANDBY"
+                    self.isProcessing = false
+                }
+                return // User just tapped mic without speaking
             }
             
-            // Groq AI brain
-            DispatchQueue.main.async { self.statusText = "ASKING GROQ..." }
-            
-            let semaphore = DispatchSemaphore(value: 0)
-            var response = "I had trouble reaching the neural network, sir."
-            
-            Task {
-                do {
-                    response = await self.brain.ask(text)
-                } catch {}
-                semaphore.signal()
+            DispatchQueue.main.async {
+                self.currentHearing = transcript
+                self.statusText = "HEARING: \(transcript)"
             }
             
-            semaphore.wait()
-            self.speak(response)
+            self.processCommandText(transcript)
         }
+    }
+    
+    private func transcribeWithWhisperSync() -> String {
+        guard let audioData = try? Data(contentsOf: tempAudioURL) else { return "" }
+        
+        let boundary = "Boundary-\(UUID().uuidString)"
+        var request = URLRequest(url: URL(string: "https://api.groq.com/openai/v1/audio/transcriptions")!)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(brain.apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        
+        var body = Data()
+        
+        // Model
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"model\"\r\n\r\n".data(using: .utf8)!)
+        body.append("whisper-large-v3\r\n".data(using: .utf8)!)
+        
+        // File
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"audio.m4a\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: audio/m4a\r\n\r\n".data(using: .utf8)!)
+        body.append(audioData)
+        body.append("\r\n".data(using: .utf8)!)
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
+        
+        request.httpBody = body
+        
+        let semaphore = DispatchSemaphore(value: 0)
+        var transcript = ""
+        
+        let task = URLSession.shared.dataTask(with: request) { data, _, _ in
+            if let data = data,
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let text = json["text"] as? String {
+                transcript = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            semaphore.signal()
+        }
+        task.resume()
+        semaphore.wait()
+        
+        return transcript
+    }
+    
+    // MARK: - Answer command via Llama
+    
+    private func processCommandText(_ text: String) {
+        DispatchQueue.main.async {
+            self.transcript.append((role: "user", text: text))
+        }
+        
+        // Local command check first
+        if let localResponse = self.systemUtils.handleCommand(text) {
+            DispatchQueue.main.async { self.statusText = "THINKING" }
+            Thread.sleep(forTimeInterval: 0.3)
+            self.speak(localResponse)
+            return
+        }
+        
+        // Groq AI brain
+        DispatchQueue.main.async { self.statusText = "ASKING GROQ..." }
+        
+        let semaphore = DispatchSemaphore(value: 0)
+        var response = "I had trouble reaching the neural network, sir."
+        
+        Task {
+            do {
+                response = await self.brain.ask(text)
+            } catch {}
+            semaphore.signal()
+        }
+        
+        semaphore.wait()
+        self.speak(response)
     }
 }
