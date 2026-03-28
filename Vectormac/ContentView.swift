@@ -10,6 +10,7 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var voiceEngine = VoiceEngine()
     @StateObject private var brain = GroqBrain.shared
+    @StateObject private var clapEngine = ClapWakeEngine()
     @State private var showSettings = false
     
     var body: some View {
@@ -134,6 +135,13 @@ struct ContentView: View {
             SettingsView(brain: brain)
         }
         .onAppear {
+            clapEngine.onClapDetected = {
+                if !voiceEngine.isListening {
+                    voiceEngine.toggleListening()
+                }
+            }
+            clapEngine.startListening()
+            
             if !brain.hasAPIKey {
                 showSettings = true
             }

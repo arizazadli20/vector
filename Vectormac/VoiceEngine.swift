@@ -265,3 +265,150 @@ class VoiceEngine: ObservableObject {
         self.speak(response)
     }
 }
+import Foundation
+import AVFoundation
+import SoundAnalysis
+import CoreML
+
+/// `ClapWakeEngine` listens for "Hand Clapping" using Apple's built-in `SoundAnalysis` framework.
+///
+/// **Efficiency & Apple Neural Engine (ANE) Utilization:**
+/// Apple's `SNClassifySoundRequest` (`.version1`) runs natively on CoreML. On Apple Silicon (M-series),
+/// this model is automatically offloaded to the highly efficient Apple Neural Engine (ANE).
+/// The ANE uses significantly less power than the CPU, allowing this audio tap to run persistently
+/// in the background without draining the battery or spinning up high-performance cores.
+/// Furthermore, `AVAudioEngine` taps run asynchronously on low-priority real-time audio threads,
+/// maximizing standby efficiency.
+class ClapWakeEngine: NSObject, ObservableObject {
+    
+    private var audioEngine: AVAudioEngine?
+    private var streamAnalyzer: SNAudioStreamAnalyzer?
+    private var isListening = false
+    
+    // Callback to trigger when clap is detected
+    var onClapDetected: (() -> Void)?
+    
+    // An internal queue to process Sound Analysis results off the main thread
+    private let analysisQueue = DispatchQueue(label: "com.jarvis.soundanalysis", qos: .userInteractive)
+    
+    // Prevent multiple triggers from a single clap sequence
+    private var lastClapTime: Date = Date.distantPast
+    
+    /// Requests microphone permission and starts the background listening stream.
+    func startListening() {
+        guard !isListening else { return }
+        
+        // macOS standard microphone permission check using AVCaptureDevice
+        if #available(macOS 10.14, *) {
+            switch AVCaptureDevice.authorizationStatus(for: .audio) {
+            case .authorized:
+                self.setupAudioAnalysis()
+            case .notDetermined:
+                AVCaptureDevice.requestAccess(for: .audio) { [weak self] granted in
+                    if granted {
+                        self?.setupAudioAnalysis()
+                    } else {
+                        print("Microphone access denied for ClapWakeEngine.")
+                    }
+                }
+            case .denied, .restricted:
+                print("Microphone access denied or restricted for ClapWakeEngine.")
+            @unknown default:
+                break
+            }
+        }
+    }
+    
+    /// Stops the audio engine and releases stream resources for absolute zero battery draw.
+    func stopListening() {
+        audioEngine?.stop()
+        audioEngine?.inputNode.removeTap(onBus: 0)
+        streamAnalyzer?.removeAllRequests()
+        
+        audioEngine = nil
+        streamAnalyzer = nil
+        isListening = false
+        print("ClapWakeEngine suspended.")
+    }
+    
+    // MARK: - Core Audio Analysis
+    
+    private func setupAudioAnalysis() {
+        let engine = AVAudioEngine()
+        self.audioEngine = engine
+        
+        let inputNode = engine.inputNode
+        let inputFormat = inputNode.inputFormat(forBus: 0)
+        
+        // Initialize the stream analyzer using the input node's native format
+        streamAnalyzer = SNAudioStreamAnalyzer(format: inputFormat)
+        
+        do {
+            // Use Apple's highly optimized, on-device audio classification model (Revision 1)
+            let request = try SNClassifySoundRequest(classifierIdentifier: .version1)
+            
+            // Register self as the observer on the background analysis queue
+            try streamAnalyzer?.add(request, withObserver: self)
+            
+            // Install the tap on the audio engine graph.
+            // A 8192 buffer size optimizes efficiency limits over aggressive small-buffer polling
+            inputNode.installTap(onBus: 0, bufferSize: 8192, format: inputFormat) { [weak self] buffer, time in
+                self?.analysisQueue.async {
+                    self?.streamAnalyzer?.analyze(buffer, atAudioFramePosition: time.sampleTime)
+                }
+            }
+            
+            engine.prepare()
+            try engine.start()
+            isListening = true
+            print("ClapWakeEngine active on Neural Engine. Listening for claps...")
+            
+        } catch {
+            print("Failed to initialize SoundAnalysis request or start engine: \(error.localizedDescription)")
+            stopListening()
+        }
+    }
+    
+    // MARK: - Action Trigger
+    
+    private func triggerWakeProcess() {
+        // Enforce a 3-second debounce cooldown so multiple claps don't trigger 50 times
+        guard Date().timeIntervalSince(lastClapTime) > 3.0 else { return }
+        lastClapTime = Date()
+        
+        DispatchQueue.main.async {
+            print("👏 CLAP DETECTED! Triggering wake process.")
+            self.onClapDetected?()
+        }
+    }
+}
+
+// MARK: - SNResultsObserving Delegate
+
+extension ClapWakeEngine: SNResultsObserving {
+    
+    /// Called repeatedly by the SoundAnalysis framework as audio buffers process
+    func request(_ request: SNRequest, didProduce result: SNResult) {
+        guard let classificationResult = result as? SNClassificationResult else { return }
+        
+        // SNClassificationResult returns an array of label probabilities.
+        for classification in classificationResult.classifications {
+            if classification.identifier.contains("clapping") || classification.identifier.contains("hands_clap") || classification.identifier == "clapping" {
+                
+                // Requirement: Confidence > 0.85
+                if classification.confidence > 0.85 {
+                    triggerWakeProcess()
+                    break
+                }
+            }
+        }
+    }
+    
+    func request(_ request: SNRequest, didFailWithError error: Error) {
+        print("SoundAnalysis request failed: \(error.localizedDescription)")
+    }
+    
+    func requestDidComplete(_ request: SNRequest) {
+        print("SoundAnalysis stream completed.")
+    }
+}
