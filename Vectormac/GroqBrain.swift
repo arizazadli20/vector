@@ -46,13 +46,7 @@ class GroqBrain: ObservableObject {
         let part2 = "fAcFU2u2VNMWGdyb"
         let part3 = "3FYVqLLOqdCVykSn0IC1Ft3oDMk"
         
-        let defaultKey = part1 + part2 + part3
-        
-        if let saved = UserDefaults.standard.string(forKey: "groq_api_key"), !saved.isEmpty {
-            self.apiKey = saved
-        } else {
-            self.apiKey = defaultKey
-        }
+        self.apiKey = part1 + part2 + part3
     }
     
     func clearHistory() {

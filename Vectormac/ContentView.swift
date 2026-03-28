@@ -72,7 +72,8 @@ struct ContentView: View {
                     
                     // Title
                     Text("J.A.R.V.I.S.")
-                        .font(.system(size: 28, weight: .bold, design: .monospaced))
+                        .font(.custom("Courier", size: 28))
+                        .fontWeight(.bold)
                         .tracking(8)
                         .foregroundStyle(
                             LinearGradient(
@@ -94,7 +95,8 @@ struct ContentView: View {
                     
                     // Status
                     Text(voiceEngine.statusText)
-                        .font(.system(size: 13, weight: .medium, design: .monospaced))
+                        .font(.custom("Courier", size: 13))
+                        .fontWeight(.medium)
                         .tracking(4)
                         .foregroundColor(Color.cyan)
                         .shadow(color: Color.cyan.opacity(0.4), radius: 5)
@@ -139,7 +141,7 @@ struct ContentView: View {
                                             if line.role == "user" { Spacer() }
                                             
                                             Text(line.role == "jarvis" ? "JARVIS: \(line.text)" : line.text)
-                                                .font(.system(size: 13, design: .monospaced))
+                                                .font(.custom("Courier", size: 13))
                                                 .padding(10)
                                                 .background(
                                                     RoundedRectangle(cornerRadius: 8)
@@ -214,19 +216,21 @@ struct SettingsView: View {
     var body: some View {
         VStack(spacing: 20) {
             Text("NEURAL NETWORK CONFIG")
-                .font(.system(size: 14, weight: .medium, design: .monospaced))
+                .font(.custom("Courier", size: 14))
+                .fontWeight(.medium)
                 .tracking(3)
                 .foregroundColor(.cyan)
             
             VStack(alignment: .leading, spacing: 8) {
                 Text("GROQ API KEY")
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .font(.custom("Courier", size: 10))
+                    .fontWeight(.medium)
                     .tracking(2)
                     .foregroundColor(.cyan.opacity(0.5))
                 
                 SecureField("gsk_...", text: $apiKey)
                     .textFieldStyle(.roundedBorder)
-                    .font(.system(size: 14, design: .monospaced))
+                    .font(.custom("Courier", size: 14))
                 
                 Text("Get your free key at console.groq.com/keys")
                     .font(.caption)
@@ -292,14 +296,15 @@ struct StatusPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("SYSTEM STATUS")
-                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                .font(.custom("Courier", size: 9))
+                .fontWeight(.medium)
                 .tracking(2)
                 .foregroundColor(.cyan.opacity(0.4))
             HStack(spacing: 6) {
                 Circle().fill(Color.green).frame(width: 6, height: 6)
                     .shadow(color: .green.opacity(0.5), radius: 4)
                 Text("All Systems Online")
-                    .font(.system(size: 13, design: .monospaced))
+                    .font(.custom("Courier", size: 13))
                     .foregroundColor(.green)
             }
         }
@@ -319,11 +324,12 @@ struct HudPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
-                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                .font(.custom("Courier", size: 9))
+                .fontWeight(.medium)
                 .tracking(2)
                 .foregroundColor(.cyan.opacity(0.4))
             Text(value)
-                .font(.system(size: 14, design: .monospaced))
+                .font(.custom("Courier", size: 14))
                 .monospacedDigit()
                 .foregroundColor(Color(red: 0.78, green: 0.94, blue: 1.0))
                 .animation(nil, value: value)
