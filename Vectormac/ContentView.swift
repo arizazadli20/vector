@@ -158,9 +158,7 @@ struct ContentView: View {
                             }
                             .frame(maxWidth: 600, maxHeight: 180)
                             .onChange(of: voiceEngine.transcript.count) { _, _ in
-                                withAnimation {
-                                    proxy.scrollTo(voiceEngine.transcript.count - 1, anchor: .bottom)
-                                }
+                                proxy.scrollTo(voiceEngine.transcript.count - 1, anchor: .bottom)
                             }
                         }
                         .padding(.bottom, 30)

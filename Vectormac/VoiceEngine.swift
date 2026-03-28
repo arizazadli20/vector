@@ -59,6 +59,14 @@ class VoiceEngine: ObservableObject {
     // MARK: - Toggle
     
     func toggleListening() {
+        if isSpeaking {
+            speakProcess?.terminate()
+            isSpeaking = false
+            isProcessing = false
+            statusText = "STANDBY"
+            return
+        }
+        
         if isListening {
             stopRecordingAndProcess(manual: true)
         } else {
@@ -194,6 +202,11 @@ class VoiceEngine: ObservableObject {
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
         body.append("Content-Disposition: form-data; name=\"model\"\r\n\r\n".data(using: .utf8)!)
         body.append("whisper-large-v3\r\n".data(using: .utf8)!)
+        
+        // Force English Language
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"language\"\r\n\r\n".data(using: .utf8)!)
+        body.append("en\r\n".data(using: .utf8)!)
         
         // File
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
