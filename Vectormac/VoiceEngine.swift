@@ -8,7 +8,6 @@
 import Foundation
 import Speech
 import AVFoundation
-import AppKit
 
 class VoiceEngine: ObservableObject {
     
@@ -19,36 +18,25 @@ class VoiceEngine: ObservableObject {
     @Published var currentHearing = ""
     @Published var audioLevel: CGFloat = 0
     
-    private var speechSynthesizer: NSSpeechSynthesizer?
+    private let synthesizer = AVSpeechSynthesizer()
     private var recognizer: SFSpeechRecognizer?
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
     private var audioEngine: AVAudioEngine?
     private let brain = GroqBrain.shared
     private let systemUtils = SystemUtils.shared
+    private var synthDelegate: SpeechDelegate?
     
     private var silenceTimer: Timer?
     private var isProcessing = false
     
     init() {
-        // Speech recognizer
         recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
-        
-        // Speech synthesizer with Daniel voice
-        let synth = NSSpeechSynthesizer()
-        if let synth = synth {
-            let danielVoice = NSSpeechSynthesizer.availableVoices.first {
-                $0.rawValue.lowercased().contains("daniel")
-            }
-            if let voice = danielVoice {
-                synth.setVoice(voice)
-            }
-            synth.rate = 200
-            self.speechSynthesizer = synth
-        }
+        synthDelegate = SpeechDelegate(engine: self)
+        synthesizer.delegate = synthDelegate
     }
     
-    // MARK: - Speech Synthesis
+    // MARK: - Speech Synthesis (AVSpeechSynthesizer)
     
     func speak(_ text: String) {
         DispatchQueue.main.async { [weak self] in
@@ -57,37 +45,47 @@ class VoiceEngine: ObservableObject {
             self.statusText = "SPEAKING"
             self.transcript.append((role: "jarvis", text: text))
             
-            guard let synth = self.speechSynthesizer else {
-                // Fallback: use macOS 'say' command
-                let process = Process()
-                process.executableURL = URL(fileURLWithPath: "/usr/bin/say")
-                process.arguments = ["-v", "Daniel", "-r", "195", text]
-                try? process.run()
-                
-                DispatchQueue.global().async {
-                    process.waitUntilExit()
-                    DispatchQueue.main.async {
-                        self.isSpeaking = false
-                        self.isProcessing = false
-                        self.statusText = "STANDBY"
-                    }
+            let utterance = AVSpeechUtterance(string: text)
+            utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.9
+            utterance.pitchMultiplier = 0.9
+            utterance.volume = 1.0
+            
+            // Try to find a British English voice
+            let preferredVoices = [
+                "Daniel", "com.apple.voice.compact.en-GB.Daniel",
+                "com.apple.ttsbundle.Daniel-compact"
+            ]
+            
+            var selectedVoice: AVSpeechSynthesisVoice?
+            for voiceName in preferredVoices {
+                if let voice = AVSpeechSynthesisVoice(identifier: voiceName) {
+                    selectedVoice = voice
+                    break
                 }
-                return
             }
             
-            synth.startSpeaking(text)
-            
-            // Poll for completion on background thread
-            DispatchQueue.global(qos: .userInitiated).async {
-                while synth.isSpeaking {
-                    Thread.sleep(forTimeInterval: 0.1)
-                }
-                DispatchQueue.main.async {
-                    self.isSpeaking = false
-                    self.isProcessing = false
-                    self.statusText = "STANDBY"
+            if selectedVoice == nil {
+                // Fallback: any en-GB voice
+                selectedVoice = AVSpeechSynthesisVoice.speechVoices().first {
+                    $0.language == "en-GB"
                 }
             }
+            
+            if selectedVoice == nil {
+                // Final fallback: any English voice
+                selectedVoice = AVSpeechSynthesisVoice(language: "en-US")
+            }
+            
+            utterance.voice = selectedVoice
+            self.synthesizer.speak(utterance)
+        }
+    }
+    
+    func didFinishSpeaking() {
+        DispatchQueue.main.async { [weak self] in
+            self?.isSpeaking = false
+            self?.isProcessing = false
+            self?.statusText = "STANDBY"
         }
     }
     
@@ -126,7 +124,6 @@ class VoiceEngine: ObservableObject {
     // MARK: - Begin Recognition
     
     private func beginRecognition() {
-        // Clean up any previous session
         cleanupAudioSession()
         
         guard let recognizer = recognizer, recognizer.isAvailable else {
@@ -141,21 +138,17 @@ class VoiceEngine: ObservableObject {
         request.shouldReportPartialResults = true
         self.recognitionRequest = request
         
-        // Get input node and format
         let inputNode = engine.inputNode
         let recordingFormat = inputNode.outputFormat(forBus: 0)
         
-        // Safety check: format must have channels
         guard recordingFormat.channelCount > 0 else {
             statusText = "NO AUDIO INPUT DEVICE"
             return
         }
         
-        // Install audio tap
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
             request.append(buffer)
             
-            // Calculate audio level
             if let channelData = buffer.floatChannelData?[0] {
                 let frames = Int(buffer.frameLength)
                 var sum: Float = 0
@@ -167,7 +160,6 @@ class VoiceEngine: ObservableObject {
             }
         }
         
-        // Start recognition task
         recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
             DispatchQueue.main.async {
                 guard let self = self else { return }
@@ -177,7 +169,6 @@ class VoiceEngine: ObservableObject {
                     self.currentHearing = text
                     self.statusText = "HEARING: \(text)"
                     
-                    // Reset silence timer
                     self.silenceTimer?.invalidate()
                     self.silenceTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: false) { [weak self] _ in
                         guard let self = self else { return }
@@ -185,16 +176,12 @@ class VoiceEngine: ObservableObject {
                     }
                 }
                 
-                if let error = error {
-                    // Only show error if we're still supposed to be listening
-                    if self.isListening {
-                        print("Recognition error: \(error.localizedDescription)")
-                    }
+                if let error = error, self.isListening {
+                    print("Recognition error: \(error.localizedDescription)")
                 }
             }
         }
         
-        // Start audio engine
         engine.prepare()
         do {
             try engine.start()
@@ -202,12 +189,12 @@ class VoiceEngine: ObservableObject {
             statusText = "LISTENING"
             currentHearing = ""
         } catch {
-            statusText = "AUDIO ERROR: \(error.localizedDescription)"
+            statusText = "AUDIO ERROR"
             cleanupAudioSession()
         }
     }
     
-    // MARK: - Stop Listening
+    // MARK: - Stop
     
     func stopListening() {
         silenceTimer?.invalidate()
@@ -215,9 +202,7 @@ class VoiceEngine: ObservableObject {
         isListening = false
         audioLevel = 0
         cleanupAudioSession()
-        if !isProcessing {
-            statusText = "STANDBY"
-        }
+        if !isProcessing { statusText = "STANDBY" }
     }
     
     private func cleanupAudioSession() {
@@ -241,35 +226,42 @@ class VoiceEngine: ObservableObject {
         transcript.append((role: "user", text: text))
         currentHearing = ""
         
-        // Process on background thread to avoid blocking UI
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
             
-            // Check for local commands first
             if let localResponse = self.systemUtils.handleCommand(text) {
-                DispatchQueue.main.async {
-                    self.statusText = "THINKING"
-                }
+                DispatchQueue.main.async { self.statusText = "THINKING" }
                 Thread.sleep(forTimeInterval: 0.2)
                 self.speak(localResponse)
             } else {
-                // Fall back to Groq AI
-                DispatchQueue.main.async {
-                    self.statusText = "THINKING"
-                }
-                
-                // Use semaphore to make async call synchronous on this background thread
+                DispatchQueue.main.async { self.statusText = "THINKING" }
                 let semaphore = DispatchSemaphore(value: 0)
                 var response = "Neural network timeout, sir."
-                
                 Task {
                     response = await self.brain.ask(text)
                     semaphore.signal()
                 }
-                
                 semaphore.wait()
                 self.speak(response)
             }
         }
+    }
+}
+
+// MARK: - AVSpeechSynthesizer Delegate
+
+class SpeechDelegate: NSObject, AVSpeechSynthesizerDelegate {
+    weak var engine: VoiceEngine?
+    
+    init(engine: VoiceEngine) {
+        self.engine = engine
+    }
+    
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        engine?.didFinishSpeaking()
+    }
+    
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        engine?.didFinishSpeaking()
     }
 }
