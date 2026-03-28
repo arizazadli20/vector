@@ -26,14 +26,15 @@ class VoiceEngine: ObservableObject {
     private let systemUtils = SystemUtils.shared
     
     private var silenceTimer: Timer?
+    private var maxTimer: Timer?
+    private var lastText = ""
     private var isProcessing = false
-    private var speakProcess: Process?
     
     init() {
         recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
     }
     
-    // MARK: - Speech using macOS 'say' command (most reliable)
+    // MARK: - Speech (macOS say command)
     
     func speak(_ text: String) {
         DispatchQueue.main.async { [weak self] in
@@ -43,27 +44,17 @@ class VoiceEngine: ObservableObject {
             self.transcript.append((role: "jarvis", text: text))
         }
         
-        // Use macOS 'say' command — same as Python version, 100% reliable
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
-            
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/say")
             process.arguments = ["-v", "Daniel", "-r", "195", text]
-            self.speakProcess = process
-            
-            do {
-                try process.run()
-                process.waitUntilExit()
-            } catch {
-                print("Say command error: \(error)")
-            }
-            
+            try? process.run()
+            process.waitUntilExit()
             DispatchQueue.main.async {
                 self.isSpeaking = false
                 self.isProcessing = false
                 self.statusText = "STANDBY"
-                self.speakProcess = nil
             }
         }
     }
@@ -72,45 +63,41 @@ class VoiceEngine: ObservableObject {
     
     func toggleListening() {
         if isListening {
-            let captured = currentHearing
-            stopListening()
-            if !captured.trimmingCharacters(in: .whitespaces).isEmpty {
+            // If user taps to stop — use whatever was heard so far
+            let captured = lastText.trimmingCharacters(in: .whitespaces)
+            forceStop()
+            if !captured.isEmpty {
                 processCommand(captured)
             }
         } else {
-            requestPermissionAndStart()
+            startListeningWithPermission()
         }
     }
     
-    // MARK: - Permission
+    // MARK: - Permission + Start
     
-    private func requestPermissionAndStart() {
+    private func startListeningWithPermission() {
         guard !isProcessing else { return }
         
         SFSpeechRecognizer.requestAuthorization { status in
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
-                switch status {
-                case .authorized:
+                if status == .authorized {
                     self.beginRecognition()
-                case .denied, .restricted:
-                    self.statusText = "SPEECH PERMISSION DENIED"
-                case .notDetermined:
-                    self.statusText = "WAITING FOR PERMISSION"
-                @unknown default:
-                    self.statusText = "UNKNOWN STATE"
+                } else {
+                    self.statusText = "MICROPHONE PERMISSION DENIED"
                 }
             }
         }
     }
     
-    // MARK: - Recognition
+    // MARK: - Core Recognition
     
     private func beginRecognition() {
-        cleanupAudioSession()
+        forceStop()
         
         guard let recognizer = recognizer, recognizer.isAvailable else {
-            statusText = "SPEECH NOT AVAILABLE"
+            statusText = "SPEECH ENGINE NOT AVAILABLE"
             return
         }
         
@@ -119,59 +106,51 @@ class VoiceEngine: ObservableObject {
         
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
+        request.taskHint = .dictation
         self.recognitionRequest = request
+        self.lastText = ""
         
         let inputNode = engine.inputNode
-        let recordingFormat = inputNode.outputFormat(forBus: 0)
-        
-        guard recordingFormat.channelCount > 0 else {
-            statusText = "NO MICROPHONE"
+        let fmt = inputNode.outputFormat(forBus: 0)
+        guard fmt.channelCount > 0 else {
+            statusText = "NO MICROPHONE DETECTED"
             return
         }
         
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
-            request.append(buffer)
-            
-            if let data = buffer.floatChannelData?[0] {
-                let frames = Int(buffer.frameLength)
-                var sum: Float = 0
-                for i in 0..<frames { sum += abs(data[i]) }
-                let avg = sum / Float(max(frames, 1))
-                DispatchQueue.main.async {
-                    self?.audioLevel = CGFloat(min(avg * 10, 1.0))
-                }
-            }
+        // Tap audio to feed recognizer + compute level
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: fmt) { [weak self] buffer, _ in
+            self?.recognitionRequest?.append(buffer)
+            guard let data = buffer.floatChannelData?[0] else { return }
+            let frames = Int(buffer.frameLength)
+            var sum: Float = 0
+            for i in 0..<frames { sum += abs(data[i]) }
+            let avg = CGFloat(sum / Float(max(frames, 1))) * 10
+            DispatchQueue.main.async { self?.audioLevel = min(avg, 1.0) }
         }
         
+        // Recognition callback
         recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
-            DispatchQueue.main.async {
-                guard let self = self, self.isListening else { return }
+            guard let self = self else { return }
+            
+            if let result = result {
+                let text = result.bestTranscription.formattedString.trimmingCharacters(in: .whitespaces)
+                guard !text.isEmpty else { return }
                 
-                var isFinal = false
-                
-                if let result = result {
-                    let text = result.bestTranscription.formattedString
+                DispatchQueue.main.async {
                     self.currentHearing = text
                     self.statusText = "HEARING: \(text)"
-                    isFinal = result.isFinal
+                    self.lastText = text
                     
+                    // Cancel previous silence timer and set new one
                     self.silenceTimer?.invalidate()
-                    
-                    if isFinal {
-                        self.processCommand(text)
-                    } else {
-                        self.silenceTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: false) { [weak self] _ in
-                            guard let self = self, !self.isProcessing else { return }
-                            self.processCommand(text)
+                    self.silenceTimer = Timer.scheduledTimer(withTimeInterval: 1.2, repeats: false) { [weak self] _ in
+                        guard let self = self, self.isListening, !self.isProcessing else { return }
+                        // Capture what was heard and process it
+                        let final = self.lastText
+                        self.forceStop()
+                        if !final.isEmpty {
+                            self.processCommand(final)
                         }
-                    }
-                }
-                
-                if let error = error {
-                    // Ignore benign stoppage errors
-                    let errStr = error.localizedDescription
-                    if !errStr.contains("Catching up") {
-                        print("Recognition error: \(errStr)")
                     }
                 }
             }
@@ -180,51 +159,72 @@ class VoiceEngine: ObservableObject {
         engine.prepare()
         do {
             try engine.start()
-            isListening = true
-            statusText = "LISTENING"
-            currentHearing = ""
         } catch {
-            statusText = "AUDIO ERROR"
-            cleanupAudioSession()
+            statusText = "AUDIO ERROR: \(error.localizedDescription)"
+            forceStop()
+            return
+        }
+        
+        DispatchQueue.main.async {
+            self.isListening = true
+            self.statusText = "LISTENING"
+            self.currentHearing = ""
+            
+            // Safety valve: auto-stop after 15 seconds max
+            self.maxTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: false) { [weak self] _ in
+                guard let self = self, self.isListening else { return }
+                let final = self.lastText
+                self.forceStop()
+                if !final.isEmpty {
+                    self.processCommand(final)
+                } else {
+                    self.statusText = "STANDBY"
+                }
+            }
         }
     }
     
-    // MARK: - Stop
+    // MARK: - Stop completely
     
-    func stopListening() {
+    private func forceStop() {
         silenceTimer?.invalidate()
         silenceTimer = nil
+        maxTimer?.invalidate()
+        maxTimer = nil
         isListening = false
         audioLevel = 0
-        cleanupAudioSession()
-        if !isProcessing { statusText = "STANDBY" }
-    }
-    
-    private func cleanupAudioSession() {
+        
         audioEngine?.stop()
         audioEngine?.inputNode.removeTap(onBus: 0)
         audioEngine = nil
+        
         recognitionRequest?.endAudio()
         recognitionRequest = nil
         recognitionTask?.cancel()
         recognitionTask = nil
     }
     
-    // MARK: - Process Command
+    func stopListening() {
+        forceStop()
+        if !isProcessing { statusText = "STANDBY" }
+    }
+    
+    // MARK: - Process & Ask Groq
     
     private func processCommand(_ text: String) {
         guard !isProcessing, !text.isEmpty else { return }
         isProcessing = true
-        stopListening()
         
-        statusText = "PROCESSING"
-        transcript.append((role: "user", text: text))
-        currentHearing = ""
+        DispatchQueue.main.async {
+            self.statusText = "PROCESSING..."
+            self.transcript.append((role: "user", text: text))
+            self.currentHearing = ""
+        }
         
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
             
-            // Check local commands first
+            // Local command check first
             if let localResponse = self.systemUtils.handleCommand(text) {
                 DispatchQueue.main.async { self.statusText = "THINKING" }
                 Thread.sleep(forTimeInterval: 0.3)
@@ -232,22 +232,20 @@ class VoiceEngine: ObservableObject {
                 return
             }
             
-            // Groq AI
-            DispatchQueue.main.async { self.statusText = "THINKING" }
+            // Groq AI brain
+            DispatchQueue.main.async { self.statusText = "ASKING GROQ..." }
             
             let semaphore = DispatchSemaphore(value: 0)
-            var response = "Neural network timeout, sir."
+            var response = "I had trouble reaching the neural network, sir."
             
             Task {
-                response = await self.brain.ask(text)
+                do {
+                    response = await self.brain.ask(text)
+                } catch {}
                 semaphore.signal()
             }
             
-            let result = semaphore.wait(timeout: .now() + 30)
-            if result == .timedOut {
-                response = "The neural network took too long, sir. Please try again."
-            }
-            
+            semaphore.wait()
             self.speak(response)
         }
     }
