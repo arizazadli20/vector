@@ -369,16 +369,40 @@ class ClapWakeEngine: NSObject, ObservableObject {
         }
     }
     
+    private var clapCount: Int = 0
+    
     // MARK: - Action Trigger
     
-    private func triggerWakeProcess() {
-        // Enforce a 3-second debounce cooldown so multiple claps don't trigger 50 times
-        guard Date().timeIntervalSince(lastClapTime) > 3.0 else { return }
-        lastClapTime = Date()
+    private func registerClap() {
+        let now = Date()
+        let timeSinceLastClap = now.timeIntervalSince(lastClapTime)
         
-        DispatchQueue.main.async {
-            print("👏 CLAP DETECTED! Triggering wake process.")
-            self.onClapDetected?()
+        // Block all claps if we are in a 3-second cooldown after a successful sequence
+        if timeSinceLastClap < -0.1 { return } // If lastClapTime is in the future (cooldown)
+        
+        // If it's been more than 1.5 seconds since the last clap, restart the sequence
+        if timeSinceLastClap > 1.5 {
+            clapCount = 1
+            lastClapTime = now
+            print("👏 First clap detected (awaiting second...)")
+        } 
+        // If it's a valid second clap (not an immediate echo, must be > 0.3s gap)
+        else if timeSinceLastClap > 0.3 {
+            clapCount += 1
+            lastClapTime = now
+            
+            if clapCount == 2 {
+                // Double clap achieved! Reset count.
+                clapCount = 0
+                
+                // Set lastClapTime to the future to enforce a 3-second cooldown
+                lastClapTime = Date().addingTimeInterval(3.0)
+                
+                DispatchQueue.main.async {
+                    print("👏👏 DOUBLE CLAP DETECTED! Waking Jarvis.")
+                    self.onClapDetected?()
+                }
+            }
         }
     }
 }
@@ -397,7 +421,7 @@ extension ClapWakeEngine: SNResultsObserving {
                 
                 // Requirement: Confidence > 0.85
                 if classification.confidence > 0.85 {
-                    triggerWakeProcess()
+                    registerClap()
                     break
                 }
             }
