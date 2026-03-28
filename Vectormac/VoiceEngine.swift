@@ -17,7 +17,11 @@ class VoiceEngine: ObservableObject {
     @Published var transcript: [(role: String, text: String)] = []
     @Published var currentHearing = ""
     @Published var audioLevel: CGFloat = 0
-       private var audioRecorder: AVAudioRecorder?
+    
+    private let brain = GroqBrain.shared
+    private let systemUtils = SystemUtils.shared
+    
+    private var audioRecorder: AVAudioRecorder?
     private var levelTimer: Timer?
     private var silenceDuration: TimeInterval = 0
     private var isProcessing = false
