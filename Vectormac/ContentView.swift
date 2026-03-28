@@ -19,9 +19,6 @@ struct ContentView: View {
                 Color(red: 0.008, green: 0.04, blue: 0.075)
                     .ignoresSafeArea()
                 
-                // Grid overlay
-                GridOverlay()
-                
                 // Ambient glow
                 RadialGradient(
                     colors: [Color.cyan.opacity(0.06), .clear],

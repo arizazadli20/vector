@@ -257,9 +257,7 @@ class VoiceEngine: ObservableObject {
         var response = "I had trouble reaching the neural network, sir."
         
         Task {
-            do {
-                response = await self.brain.ask(text)
-            } catch {}
+            response = await self.brain.ask(text)
             semaphore.signal()
         }
         
