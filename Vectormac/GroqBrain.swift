@@ -41,7 +41,28 @@ class GroqBrain: ObservableObject {
     }
     
     init() {
-        self.apiKey = UserDefaults.standard.string(forKey: "groq_api_key") ?? ""
+        // Load from UserDefaults first, then try config file
+        if let saved = UserDefaults.standard.string(forKey: "groq_api_key"), !saved.isEmpty {
+            self.apiKey = saved
+        } else if let configKey = GroqBrain.loadKeyFromConfig() {
+            self.apiKey = configKey
+        } else {
+            self.apiKey = ""
+        }
+    }
+    
+    /// Load API key from ~/.jarvis_config file
+    private static func loadKeyFromConfig() -> String? {
+        let path = NSHomeDirectory() + "/.jarvis_config"
+        guard let content = try? String(contentsOfFile: path, encoding: .utf8) else { return nil }
+        for line in content.components(separatedBy: .newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("GROQ_API_KEY=") {
+                let key = String(trimmed.dropFirst("GROQ_API_KEY=".count)).trimmingCharacters(in: .whitespaces)
+                return key.isEmpty ? nil : key
+            }
+        }
+        return nil
     }
     
     func clearHistory() {

@@ -322,14 +322,18 @@ struct HudPanel: View {
                 .foregroundColor(.cyan.opacity(0.4))
             Text(value)
                 .font(.system(size: 14, design: .monospaced))
+                .monospacedDigit()
                 .foregroundColor(Color(red: 0.78, green: 0.94, blue: 1.0))
+                .animation(nil, value: value)
         }
         .padding(14)
+        .frame(minWidth: 140, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 8)
                 .fill(Color.cyan.opacity(0.03))
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cyan.opacity(0.1), lineWidth: 1))
         )
+        .fixedSize()
     }
 }
 
