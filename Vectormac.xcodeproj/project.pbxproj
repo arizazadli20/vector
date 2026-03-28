@@ -402,7 +402,10 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Vectormac/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "J.A.R.V.I.S. needs microphone access for voice commands.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "J.A.R.V.I.S. uses speech recognition to understand your voice commands.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -429,7 +432,10 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Vectormac/Info.plist;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "J.A.R.V.I.S. needs microphone access for voice commands.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "J.A.R.V.I.S. uses speech recognition to understand your voice commands.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
