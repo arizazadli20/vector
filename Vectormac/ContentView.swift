@@ -72,9 +72,7 @@ struct ContentView: View {
                     
                     // Title
                     Text("J.A.R.V.I.S.")
-                        .font(.custom("Courier", size: 28))
-                        .fontWeight(.bold)
-                        .tracking(8)
+                        .font(.custom("Courier-Bold", size: 28))
                         .foregroundStyle(
                             LinearGradient(
                                 colors: [.white, Color.cyan.opacity(0.7)],
@@ -96,8 +94,6 @@ struct ContentView: View {
                     // Status
                     Text(voiceEngine.statusText)
                         .font(.custom("Courier", size: 13))
-                        .fontWeight(.medium)
-                        .tracking(4)
                         .foregroundColor(Color.cyan)
                         .shadow(color: Color.cyan.opacity(0.4), radius: 5)
                         .lineLimit(1)
@@ -215,17 +211,13 @@ struct SettingsView: View {
     
     var body: some View {
         VStack(spacing: 20) {
-            Text("NEURAL NETWORK CONFIG")
+            Text("N E U R A L   N E T W O R K")
                 .font(.custom("Courier", size: 14))
-                .fontWeight(.medium)
-                .tracking(3)
                 .foregroundColor(.cyan)
             
             VStack(alignment: .leading, spacing: 8) {
-                Text("GROQ API KEY")
+                Text("G R O Q   A P I   K E Y")
                     .font(.custom("Courier", size: 10))
-                    .fontWeight(.medium)
-                    .tracking(2)
                     .foregroundColor(.cyan.opacity(0.5))
                 
                 SecureField("gsk_...", text: $apiKey)
@@ -295,10 +287,8 @@ struct CornerMark: View {
 struct StatusPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("SYSTEM STATUS")
+            Text("S Y S T E M   S T A T U S")
                 .font(.custom("Courier", size: 9))
-                .fontWeight(.medium)
-                .tracking(2)
                 .foregroundColor(.cyan.opacity(0.4))
             HStack(spacing: 6) {
                 Circle().fill(Color.green).frame(width: 6, height: 6)
@@ -323,10 +313,8 @@ struct HudPanel: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(label)
+            Text(label.map { String($0) }.joined(separator: " ").uppercased())
                 .font(.custom("Courier", size: 9))
-                .fontWeight(.medium)
-                .tracking(2)
                 .foregroundColor(.cyan.opacity(0.4))
             Text(value)
                 .font(.custom("Courier", size: 14))
