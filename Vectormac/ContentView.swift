@@ -34,10 +34,10 @@ struct ContentView: View {
                 // HUD Panels (using overlay alignment)
                 VStack {
                     HStack {
-                        HudPanel(label: "SYSTEM TIME", value: currentTime())
+                        HudPanel(label: "S Y S T E M   T I M E", value: currentTime())
                             .padding(20)
                         Spacer()
-                        HudPanel(label: "DATE", value: currentDate())
+                        HudPanel(label: "D A T E", value: currentDate())
                             .padding(20)
                     }
                     Spacer()
@@ -45,7 +45,7 @@ struct ContentView: View {
                         StatusPanel()
                             .padding(20)
                         Spacer()
-                        HudPanel(label: "J.A.R.V.I.S.", value: "v3.7.1")
+                        HudPanel(label: "J . A . R . V . I . S .", value: "v3.7.1")
                             .padding(20)
                     }
                 }
@@ -313,7 +313,7 @@ struct HudPanel: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(label.map { String($0) }.joined(separator: " ").uppercased())
+            Text(label)
                 .font(.system(size: 9, design: .monospaced))
                 .foregroundColor(.cyan.opacity(0.4))
             Text(value)
