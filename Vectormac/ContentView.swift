@@ -44,9 +44,13 @@ struct ContentView: View {
                         )
                         .shadow(color: Color.cyan.opacity(0.3), radius: 10)
                     
-                    // Arc Reactor
+                    // Arc Reactor (Now functions as the Mic Button!)
                     ArcReactorView(isListening: voiceEngine.isListening)
                         .frame(width: 220, height: 220)
+                        .contentShape(Circle())
+                        .onTapGesture {
+                            voiceEngine.toggleListening()
+                        }
                     
                     // Waveform
                     WaveformView(audioLevel: voiceEngine.audioLevel, isListening: voiceEngine.isListening)
@@ -106,26 +110,6 @@ struct ContentView: View {
                         // Empty placeholder so the UI doesn't jump drastically when the first word comes in
                         Spacer().frame(height: 120)
                     }
-                    
-                    // Voice Button
-                    Circle()
-                        .stroke(
-                            voiceEngine.isListening ? Color.green : Color.cyan,
-                            lineWidth: 2
-                        )
-                        .frame(width: 60, height: 60)
-                        .shadow(color: (voiceEngine.isListening ? Color.green : Color.cyan).opacity(0.3), radius: 10)
-                        .scaleEffect(voiceEngine.isListening ? 1.05 : 1.0)
-                        .overlay(
-                            Image(systemName: voiceEngine.isListening ? "mic.fill" : "mic")
-                                .font(.title2)
-                                .foregroundColor(voiceEngine.isListening ? .green : .cyan)
-                        )
-                        .contentShape(Circle())
-                        .onTapGesture {
-                            voiceEngine.toggleListening()
-                        }
-                        .padding(.top, 8)
                     
                     Spacer()
                 }
