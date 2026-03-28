@@ -98,9 +98,50 @@ struct ContentView: View {
                         .shadow(color: Color.cyan.opacity(0.4), radius: 5)
                         .lineLimit(1)
                         .truncationMode(.tail)
-                        .frame(width: 500, height: 20, alignment: .leading)
-                        .multilineTextAlignment(.leading)
-                        .animation(nil, value: voiceEngine.statusText)
+                        .frame(width: 500, height: 20, alignment: .center)
+                        .multilineTextAlignment(.center)
+                        
+                    // Transcript area (Inline to prevent overlapping)
+                    if !voiceEngine.transcript.isEmpty {
+                        ScrollViewReader { proxy in
+                            ScrollView {
+                                LazyVStack(spacing: 8) {
+                                    ForEach(Array(voiceEngine.transcript.enumerated()), id: \.offset) { index, line in
+                                        HStack {
+                                            if line.role == "user" { Spacer() }
+                                            
+                                            Text(line.role == "jarvis" ? "JARVIS: \(line.text)" : line.text)
+                                                .font(.custom("Courier", size: 13))
+                                                .padding(10)
+                                                .background(
+                                                    RoundedRectangle(cornerRadius: 8)
+                                                        .fill(Color.cyan.opacity(line.role == "user" ? 0.1 : 0.04))
+                                                        .overlay(
+                                                            RoundedRectangle(cornerRadius: 8)
+                                                                .stroke(Color.cyan.opacity(line.role == "user" ? 0.2 : 0.08), lineWidth: 1)
+                                                        )
+                                                )
+                                                .foregroundColor(line.role == "jarvis" ? .cyan : Color(red: 0.78, green: 0.94, blue: 1.0))
+                                                .multilineTextAlignment(line.role == "user" ? .trailing : .leading)
+                                            
+                                            if line.role == "jarvis" { Spacer() }
+                                        }
+                                        .id(index)
+                                    }
+                                }
+                                .padding(.horizontal, 20)
+                            }
+                            .frame(maxWidth: 600)
+                            .frame(height: 120) // Fixed height block so it doesn't push the UI too much
+                            .onChange(of: voiceEngine.transcript.count) { _, _ in
+                                proxy.scrollTo(voiceEngine.transcript.count - 1, anchor: .bottom)
+                            }
+                        }
+                    }
+                    else {
+                        // Empty placeholder so the UI doesn't jump drastically when the first word comes in
+                        Spacer().frame(height: 120)
+                    }
                     
                     // Voice Button
                     Button(action: { voiceEngine.toggleListening() }) {
@@ -122,47 +163,6 @@ struct ContentView: View {
                     .padding(.top, 8)
                     
                     Spacer()
-                }
-                
-                // Transcript area
-                if !voiceEngine.transcript.isEmpty {
-                    VStack {
-                        Spacer()
-                        
-                        ScrollViewReader { proxy in
-                            ScrollView {
-                                LazyVStack(spacing: 8) {
-                                    ForEach(Array(voiceEngine.transcript.enumerated()), id: \.offset) { index, line in
-                                        HStack {
-                                            if line.role == "user" { Spacer() }
-                                            
-                                            Text(line.role == "jarvis" ? "JARVIS: \(line.text)" : line.text)
-                                                .font(.custom("Courier", size: 13))
-                                                .padding(10)
-                                                .background(
-                                                    RoundedRectangle(cornerRadius: 8)
-                                                        .fill(Color.cyan.opacity(line.role == "user" ? 0.1 : 0.04))
-                                                        .overlay(
-                                                            RoundedRectangle(cornerRadius: 8)
-                                                                .stroke(Color.cyan.opacity(line.role == "user" ? 0.2 : 0.08), lineWidth: 1)
-                                                        )
-                                                )
-                                                .foregroundColor(line.role == "jarvis" ? .cyan : Color(red: 0.78, green: 0.94, blue: 1.0))
-                                            
-                                            if line.role == "jarvis" { Spacer() }
-                                        }
-                                        .id(index)
-                                    }
-                                }
-                                .padding(.horizontal, 20)
-                            }
-                            .frame(maxWidth: 600, maxHeight: 180)
-                            .onChange(of: voiceEngine.transcript.count) { _, _ in
-                                proxy.scrollTo(voiceEngine.transcript.count - 1, anchor: .bottom)
-                            }
-                        }
-                        .padding(.bottom, 30)
-                    }
                 }
                 
                 // Settings gear
