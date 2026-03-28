@@ -100,7 +100,9 @@ struct ContentView: View {
                         .shadow(color: Color.cyan.opacity(0.4), radius: 5)
                         .lineLimit(1)
                         .truncationMode(.tail)
-                        .frame(maxWidth: 500)
+                        .frame(width: 500, height: 20, alignment: .leading)
+                        .multilineTextAlignment(.leading)
+                        .animation(nil, value: voiceEngine.statusText)
                     
                     // Voice Button
                     Button(action: { voiceEngine.toggleListening() }) {
