@@ -72,7 +72,11 @@ class VoiceEngine: ObservableObject {
     
     func toggleListening() {
         if isListening {
+            let captured = currentHearing
             stopListening()
+            if !captured.trimmingCharacters(in: .whitespaces).isEmpty {
+                processCommand(captured)
+            }
         } else {
             requestPermissionAndStart()
         }
@@ -143,20 +147,32 @@ class VoiceEngine: ObservableObject {
             DispatchQueue.main.async {
                 guard let self = self, self.isListening else { return }
                 
+                var isFinal = false
+                
                 if let result = result {
                     let text = result.bestTranscription.formattedString
                     self.currentHearing = text
                     self.statusText = "HEARING: \(text)"
+                    isFinal = result.isFinal
                     
                     self.silenceTimer?.invalidate()
-                    self.silenceTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: false) { [weak self] _ in
-                        guard let self = self, !self.isProcessing else { return }
+                    
+                    if isFinal {
                         self.processCommand(text)
+                    } else {
+                        self.silenceTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: false) { [weak self] _ in
+                            guard let self = self, !self.isProcessing else { return }
+                            self.processCommand(text)
+                        }
                     }
                 }
                 
                 if let error = error {
-                    print("Recognition error: \(error.localizedDescription)")
+                    // Ignore benign stoppage errors
+                    let errStr = error.localizedDescription
+                    if !errStr.contains("Catching up") {
+                        print("Recognition error: \(errStr)")
+                    }
                 }
             }
         }

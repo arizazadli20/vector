@@ -123,8 +123,8 @@ class GroqBrain: ObservableObject {
             if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let choices = json["choices"] as? [[String: Any]],
                let first = choices.first,
-               let message = first["message"] as? [String: String],
-               let content = message["content"] {
+               let message = first["message"] as? [String: Any],
+               let content = message["content"] as? String {
                 
                 let reply = content.trimmingCharacters(in: .whitespacesAndNewlines)
                 conversationHistory.append(["role": "assistant", "content": reply])
