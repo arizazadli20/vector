@@ -8,6 +8,7 @@
 import Foundation
 import Speech
 import AVFoundation
+import AppKit
 import Combine
 
 @MainActor
