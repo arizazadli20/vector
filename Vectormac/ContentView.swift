@@ -72,7 +72,7 @@ struct ContentView: View {
                     
                     // Title
                     Text("J.A.R.V.I.S.")
-                        .font(.custom("Courier-Bold", size: 28))
+                        .font(.system(size: 28, weight: .bold, design: .monospaced))
                         .foregroundStyle(
                             LinearGradient(
                                 colors: [.white, Color.cyan.opacity(0.7)],
@@ -93,13 +93,14 @@ struct ContentView: View {
                     
                     // Status
                     Text(voiceEngine.statusText)
-                        .font(.custom("Courier", size: 13))
+                        .font(.system(size: 13, design: .monospaced))
                         .foregroundColor(Color.cyan)
                         .shadow(color: Color.cyan.opacity(0.4), radius: 5)
                         .lineLimit(1)
                         .truncationMode(.tail)
                         .frame(width: 500, height: 20, alignment: .center)
                         .multilineTextAlignment(.center)
+                        .animation(nil, value: voiceEngine.statusText)
                         
                     // Transcript area (Inline to prevent overlapping)
                     if !voiceEngine.transcript.isEmpty {
@@ -111,7 +112,7 @@ struct ContentView: View {
                                             if line.role == "user" { Spacer() }
                                             
                                             Text(line.role == "jarvis" ? "JARVIS: \(line.text)" : line.text)
-                                                .font(.custom("Courier", size: 13))
+                                                .font(.system(size: 13, design: .monospaced))
                                                 .padding(10)
                                                 .background(
                                                     RoundedRectangle(cornerRadius: 8)
@@ -127,6 +128,7 @@ struct ContentView: View {
                                             if line.role == "jarvis" { Spacer() }
                                         }
                                         .id(index)
+                                        .animation(nil, value: line.text)
                                     }
                                 }
                                 .padding(.horizontal, 20)
@@ -210,17 +212,17 @@ struct SettingsView: View {
     var body: some View {
         VStack(spacing: 20) {
             Text("N E U R A L   N E T W O R K")
-                .font(.custom("Courier", size: 14))
+                .font(.system(size: 14, design: .monospaced))
                 .foregroundColor(.cyan)
             
             VStack(alignment: .leading, spacing: 8) {
                 Text("G R O Q   A P I   K E Y")
-                    .font(.custom("Courier", size: 10))
+                    .font(.system(size: 10, design: .monospaced))
                     .foregroundColor(.cyan.opacity(0.5))
                 
                 SecureField("gsk_...", text: $apiKey)
                     .textFieldStyle(.roundedBorder)
-                    .font(.custom("Courier", size: 14))
+                    .font(.system(size: 14, design: .monospaced))
                 
                 Text("Get your free key at console.groq.com/keys")
                     .font(.caption)
@@ -286,13 +288,13 @@ struct StatusPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("S Y S T E M   S T A T U S")
-                .font(.custom("Courier", size: 9))
+                .font(.system(size: 9, design: .monospaced))
                 .foregroundColor(.cyan.opacity(0.4))
             HStack(spacing: 6) {
                 Circle().fill(Color.green).frame(width: 6, height: 6)
                     .shadow(color: .green.opacity(0.5), radius: 4)
                 Text("All Systems Online")
-                    .font(.custom("Courier", size: 13))
+                    .font(.system(size: 13, design: .monospaced))
                     .foregroundColor(.green)
             }
         }
@@ -312,10 +314,10 @@ struct HudPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label.map { String($0) }.joined(separator: " ").uppercased())
-                .font(.custom("Courier", size: 9))
+                .font(.system(size: 9, design: .monospaced))
                 .foregroundColor(.cyan.opacity(0.4))
             Text(value)
-                .font(.custom("Courier", size: 14))
+                .font(.system(size: 14, design: .monospaced))
                 .monospacedDigit()
                 .foregroundColor(Color(red: 0.78, green: 0.94, blue: 1.0))
                 .animation(nil, value: value)
