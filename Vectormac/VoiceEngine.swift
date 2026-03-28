@@ -21,7 +21,7 @@ class VoiceEngine: ObservableObject {
     @Published var currentHearing = ""
     @Published var audioLevel: CGFloat = 0
     
-    private let speechSynthesizer = NSSpeechSynthesizer()
+    private let speechSynthesizer: NSSpeechSynthesizer
     private var recognizer: SFSpeechRecognizer?
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
@@ -34,15 +34,17 @@ class VoiceEngine: ObservableObject {
     private var isProcessing = false
     
     init() {
+        speechSynthesizer = NSSpeechSynthesizer() ?? NSSpeechSynthesizer(voice: nil)!
         recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
         
         // Use Daniel voice (British)
-        if let daniel = NSSpeechSynthesizer.availableVoices.first(where: {
+        let danielVoice = NSSpeechSynthesizer.availableVoices.first(where: {
             $0.rawValue.lowercased().contains("daniel")
-        }) {
-            speechSynthesizer.setVoice(daniel)
+        })
+        if let voice = danielVoice {
+            speechSynthesizer.setVoice(voice)
         }
-        speechSynthesizer.rate = 195.0 / 300.0 // Approximate from Python rate
+        speechSynthesizer.rate = 0.5
     }
     
     // MARK: - Speech Synthesis

@@ -13,142 +13,174 @@ struct ContentView: View {
     @State private var showSettings = false
     
     var body: some View {
-        ZStack {
-            // Background
-            Color(red: 0.008, green: 0.04, blue: 0.075)
+        GeometryReader { geo in
+            ZStack {
+                // Background
+                Color(red: 0.008, green: 0.04, blue: 0.075)
+                    .ignoresSafeArea()
+                
+                // Grid overlay
+                GridOverlay()
+                
+                // Ambient glow
+                RadialGradient(
+                    colors: [Color.cyan.opacity(0.06), .clear],
+                    center: .center,
+                    startRadius: 0,
+                    endRadius: 400
+                )
                 .ignoresSafeArea()
-            
-            // Grid overlay
-            GridOverlay()
-            
-            // Ambient glow
-            RadialGradient(
-                colors: [Color.cyan.opacity(0.06), .clear],
-                center: .center,
-                startRadius: 0,
-                endRadius: 400
-            )
-            .ignoresSafeArea()
-            
-            // Corner decorations
-            CornerDecorations()
-            
-            // HUD Panels
-            HudPanels()
-            
-            // Main content
-            VStack(spacing: 16) {
-                Spacer()
                 
-                // Title
-                Text("J.A.R.V.I.S.")
-                    .font(.custom("Courier", size: 28))
-                    .fontWeight(.bold)
-                    .tracking(8)
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [.white, Color.cyan.opacity(0.7)],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .shadow(color: Color.cyan.opacity(0.3), radius: 10)
-                
-                // Arc Reactor
-                ArcReactorView(isListening: voiceEngine.isListening)
-                    .frame(width: 220, height: 220)
-                
-                // Waveform
-                WaveformView(audioLevel: voiceEngine.audioLevel, isListening: voiceEngine.isListening)
-                    .frame(maxWidth: 500)
-                    .padding(.horizontal, 40)
-                
-                // Status
-                Text(voiceEngine.statusText)
-                    .font(.custom("Courier", size: 13))
-                    .tracking(4)
-                    .foregroundColor(Color.cyan)
-                    .shadow(color: Color.cyan.opacity(0.4), radius: 5)
-                    .animation(.easeInOut(duration: 0.3), value: voiceEngine.statusText)
-                
-                // Voice Button
-                Button(action: { voiceEngine.toggleListening() }) {
-                    ZStack {
-                        Circle()
-                            .stroke(
-                                voiceEngine.isListening ? Color.green : Color.cyan,
-                                lineWidth: 2
-                            )
-                            .frame(width: 60, height: 60)
-                            .shadow(color: (voiceEngine.isListening ? Color.green : Color.cyan).opacity(0.3), radius: 10)
-                        
-                        Image(systemName: voiceEngine.isListening ? "mic.fill" : "mic")
-                            .font(.title2)
-                            .foregroundColor(voiceEngine.isListening ? .green : .cyan)
+                // HUD Panels (using overlay alignment)
+                VStack {
+                    HStack {
+                        HudPanel(label: "SYSTEM TIME", value: currentTime())
+                            .padding(20)
+                        Spacer()
+                        HudPanel(label: "DATE", value: currentDate())
+                            .padding(20)
+                    }
+                    Spacer()
+                    HStack {
+                        StatusPanel()
+                            .padding(20)
+                        Spacer()
+                        HudPanel(label: "J.A.R.V.I.S.", value: "v3.7.1")
+                            .padding(20)
                     }
                 }
-                .buttonStyle(.plain)
-                .padding(.top, 8)
                 
-                Spacer()
-            }
-            
-            // Transcript area
-            if !voiceEngine.transcript.isEmpty {
+                // Corner decorations
                 VStack {
+                    HStack {
+                        CornerMark()
+                        Spacer()
+                        CornerMark().rotationEffect(.degrees(90))
+                    }
+                    Spacer()
+                    HStack {
+                        CornerMark().rotationEffect(.degrees(270))
+                        Spacer()
+                        CornerMark().rotationEffect(.degrees(180))
+                    }
+                }
+                .padding(10)
+                
+                // Main content
+                VStack(spacing: 16) {
                     Spacer()
                     
-                    ScrollViewReader { proxy in
-                        ScrollView {
-                            LazyVStack(spacing: 8) {
-                                ForEach(Array(voiceEngine.transcript.enumerated()), id: \.offset) { index, line in
-                                    HStack {
-                                        if line.role == "user" { Spacer() }
-                                        
-                                        Text(line.role == "jarvis" ? "JARVIS: \(line.text)" : line.text)
-                                            .font(.custom("Courier", size: 13))
-                                            .padding(10)
-                                            .background(
-                                                RoundedRectangle(cornerRadius: 8)
-                                                    .fill(Color.cyan.opacity(line.role == "user" ? 0.1 : 0.04))
-                                                    .overlay(
-                                                        RoundedRectangle(cornerRadius: 8)
-                                                            .stroke(Color.cyan.opacity(line.role == "user" ? 0.2 : 0.08), lineWidth: 1)
-                                                    )
-                                            )
-                                            .foregroundColor(line.role == "jarvis" ? .cyan : Color(red: 0.78, green: 0.94, blue: 1.0))
-                                        
-                                        if line.role == "jarvis" { Spacer() }
-                                    }
-                                    .id(index)
-                                }
-                            }
-                            .padding(.horizontal, 20)
+                    // Title
+                    Text("J.A.R.V.I.S.")
+                        .font(.system(size: 28, weight: .bold, design: .monospaced))
+                        .tracking(8)
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [.white, Color.cyan.opacity(0.7)],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .shadow(color: Color.cyan.opacity(0.3), radius: 10)
+                    
+                    // Arc Reactor
+                    ArcReactorView(isListening: voiceEngine.isListening)
+                        .frame(width: 220, height: 220)
+                    
+                    // Waveform
+                    WaveformView(audioLevel: voiceEngine.audioLevel, isListening: voiceEngine.isListening)
+                        .frame(maxWidth: 500)
+                        .padding(.horizontal, 40)
+                    
+                    // Status
+                    Text(voiceEngine.statusText)
+                        .font(.system(size: 13, weight: .medium, design: .monospaced))
+                        .tracking(4)
+                        .foregroundColor(Color.cyan)
+                        .shadow(color: Color.cyan.opacity(0.4), radius: 5)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .frame(maxWidth: 500)
+                    
+                    // Voice Button
+                    Button(action: { voiceEngine.toggleListening() }) {
+                        ZStack {
+                            Circle()
+                                .stroke(
+                                    voiceEngine.isListening ? Color.green : Color.cyan,
+                                    lineWidth: 2
+                                )
+                                .frame(width: 60, height: 60)
+                                .shadow(color: (voiceEngine.isListening ? Color.green : Color.cyan).opacity(0.3), radius: 10)
+                            
+                            Image(systemName: voiceEngine.isListening ? "mic.fill" : "mic")
+                                .font(.title2)
+                                .foregroundColor(voiceEngine.isListening ? .green : .cyan)
                         }
-                        .frame(maxWidth: 600, maxHeight: 180)
-                        .onChange(of: voiceEngine.transcript.count) { _, _ in
-                            withAnimation {
-                                proxy.scrollTo(voiceEngine.transcript.count - 1, anchor: .bottom)
-                            }
-                        }
-                    }
-                    .padding(.bottom, 30)
-                }
-            }
-            
-            // Settings gear
-            VStack {
-                HStack {
-                    Spacer()
-                    Button(action: { showSettings = true }) {
-                        Image(systemName: "gearshape")
-                            .font(.title3)
-                            .foregroundColor(Color.cyan.opacity(0.5))
                     }
                     .buttonStyle(.plain)
-                    .padding(20)
+                    .padding(.top, 8)
+                    
+                    Spacer()
                 }
-                Spacer()
+                
+                // Transcript area
+                if !voiceEngine.transcript.isEmpty {
+                    VStack {
+                        Spacer()
+                        
+                        ScrollViewReader { proxy in
+                            ScrollView {
+                                LazyVStack(spacing: 8) {
+                                    ForEach(Array(voiceEngine.transcript.enumerated()), id: \.offset) { index, line in
+                                        HStack {
+                                            if line.role == "user" { Spacer() }
+                                            
+                                            Text(line.role == "jarvis" ? "JARVIS: \(line.text)" : line.text)
+                                                .font(.system(size: 13, design: .monospaced))
+                                                .padding(10)
+                                                .background(
+                                                    RoundedRectangle(cornerRadius: 8)
+                                                        .fill(Color.cyan.opacity(line.role == "user" ? 0.1 : 0.04))
+                                                        .overlay(
+                                                            RoundedRectangle(cornerRadius: 8)
+                                                                .stroke(Color.cyan.opacity(line.role == "user" ? 0.2 : 0.08), lineWidth: 1)
+                                                        )
+                                                )
+                                                .foregroundColor(line.role == "jarvis" ? .cyan : Color(red: 0.78, green: 0.94, blue: 1.0))
+                                            
+                                            if line.role == "jarvis" { Spacer() }
+                                        }
+                                        .id(index)
+                                    }
+                                }
+                                .padding(.horizontal, 20)
+                            }
+                            .frame(maxWidth: 600, maxHeight: 180)
+                            .onChange(of: voiceEngine.transcript.count) { _, _ in
+                                withAnimation {
+                                    proxy.scrollTo(voiceEngine.transcript.count - 1, anchor: .bottom)
+                                }
+                            }
+                        }
+                        .padding(.bottom, 30)
+                    }
+                }
+                
+                // Settings gear
+                VStack {
+                    HStack {
+                        Spacer()
+                        Button(action: { showSettings = true }) {
+                            Image(systemName: "gearshape")
+                                .font(.title3)
+                                .foregroundColor(Color.cyan.opacity(0.5))
+                        }
+                        .buttonStyle(.plain)
+                        .padding(20)
+                    }
+                    Spacer()
+                }
             }
         }
         .sheet(isPresented: $showSettings) {
@@ -159,6 +191,14 @@ struct ContentView: View {
                 showSettings = true
             }
         }
+    }
+    
+    func currentTime() -> String {
+        Date().formatted(date: .omitted, time: .standard)
+    }
+    
+    func currentDate() -> String {
+        Date().formatted(date: .abbreviated, time: .omitted)
     }
 }
 
@@ -172,19 +212,19 @@ struct SettingsView: View {
     var body: some View {
         VStack(spacing: 20) {
             Text("NEURAL NETWORK CONFIG")
-                .font(.custom("Courier", size: 14))
+                .font(.system(size: 14, weight: .medium, design: .monospaced))
                 .tracking(3)
                 .foregroundColor(.cyan)
             
             VStack(alignment: .leading, spacing: 8) {
                 Text("GROQ API KEY")
-                    .font(.custom("Courier", size: 10))
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
                     .tracking(2)
                     .foregroundColor(.cyan.opacity(0.5))
                 
                 SecureField("gsk_...", text: $apiKey)
                     .textFieldStyle(.roundedBorder)
-                    .font(.custom("Courier", size: 14))
+                    .font(.system(size: 14, design: .monospaced))
                 
                 Text("Get your free key at console.groq.com/keys")
                     .font(.caption)
@@ -237,18 +277,6 @@ struct GridOverlay: View {
     }
 }
 
-struct CornerDecorations: View {
-    var body: some View {
-        ZStack {
-            CornerMark().position(x: 25, y: 25)
-            CornerMark().rotationEffect(.degrees(90)).position(x: 25, y: UIProxy.height - 25)
-            CornerMark().rotationEffect(.degrees(270)).position(x: UIProxy.width - 25, y: 25)
-            CornerMark().rotationEffect(.degrees(180)).position(x: UIProxy.width - 25, y: UIProxy.height - 25)
-        }
-        .ignoresSafeArea()
-    }
-}
-
 struct CornerMark: View {
     var body: some View {
         ZStack {
@@ -258,52 +286,27 @@ struct CornerMark: View {
     }
 }
 
-enum UIProxy {
-    static var width: CGFloat { NSScreen.main?.frame.width ?? 1200 }
-    static var height: CGFloat { NSScreen.main?.frame.height ?? 800 }
-}
-
-struct HudPanels: View {
-    @State private var time = Date()
-    let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
-    
+struct StatusPanel: View {
     var body: some View {
-        ZStack {
-            // Top left — time
-            HudPanel(label: "SYSTEM TIME", value: time.formatted(date: .omitted, time: .standard))
-                .position(x: 120, y: 50)
-            
-            // Top right — date
-            HudPanel(label: "DATE", value: time.formatted(date: .abbreviated, time: .omitted))
-                .position(x: UIProxy.width - 150, y: 50)
-            
-            // Bottom left — status
-            VStack(alignment: .leading, spacing: 4) {
-                Text("SYSTEM STATUS")
-                    .font(.custom("Courier", size: 9))
-                    .tracking(2)
-                    .foregroundColor(.cyan.opacity(0.4))
-                HStack(spacing: 6) {
-                    Circle().fill(Color.green).frame(width: 6, height: 6)
-                        .shadow(color: .green.opacity(0.5), radius: 4)
-                    Text("All Systems Online")
-                        .font(.custom("Courier", size: 13))
-                        .foregroundColor(.green)
-                }
+        VStack(alignment: .leading, spacing: 4) {
+            Text("SYSTEM STATUS")
+                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                .tracking(2)
+                .foregroundColor(.cyan.opacity(0.4))
+            HStack(spacing: 6) {
+                Circle().fill(Color.green).frame(width: 6, height: 6)
+                    .shadow(color: .green.opacity(0.5), radius: 4)
+                Text("All Systems Online")
+                    .font(.system(size: 13, design: .monospaced))
+                    .foregroundColor(.green)
             }
-            .padding(14)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.cyan.opacity(0.03))
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cyan.opacity(0.1), lineWidth: 1))
-            )
-            .position(x: 140, y: UIProxy.height - 60)
-            
-            // Bottom right — version
-            HudPanel(label: "J.A.R.V.I.S.", value: "v3.7.1")
-                .position(x: UIProxy.width - 120, y: UIProxy.height - 60)
         }
-        .onReceive(timer) { time = $0 }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.cyan.opacity(0.03))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.cyan.opacity(0.1), lineWidth: 1))
+        )
     }
 }
 
@@ -314,11 +317,11 @@ struct HudPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
-                .font(.custom("Courier", size: 9))
+                .font(.system(size: 9, weight: .medium, design: .monospaced))
                 .tracking(2)
                 .foregroundColor(.cyan.opacity(0.4))
             Text(value)
-                .font(.custom("Courier", size: 14))
+                .font(.system(size: 14, design: .monospaced))
                 .foregroundColor(Color(red: 0.78, green: 0.94, blue: 1.0))
         }
         .padding(14)
