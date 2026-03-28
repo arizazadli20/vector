@@ -419,8 +419,12 @@ extension ClapWakeEngine: SNResultsObserving {
         for classification in classificationResult.classifications {
             if classification.identifier.contains("clapping") || classification.identifier.contains("hands_clap") || classification.identifier == "clapping" {
                 
-                // Requirement: Confidence > 0.85
-                if classification.confidence > 0.85 {
+                if classification.confidence > 0.20 {
+                    print("🔍 Audio frame analyzed. Clap confidence: \(String(format: "%.2f", classification.confidence * 100))%")
+                }
+                
+                // Requirement: Confidence > 0.65 (macOS echo cancellation makes loud claps hard to detect cleanly)
+                if classification.confidence > 0.65 {
                     registerClap()
                     break
                 }
