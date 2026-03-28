@@ -415,18 +415,18 @@ extension ClapWakeEngine: SNResultsObserving {
     func request(_ request: SNRequest, didProduce result: SNResult) {
         guard let classificationResult = result as? SNClassificationResult else { return }
         
-        // SNClassificationResult returns an array of label probabilities.
-        for classification in classificationResult.classifications {
-            if classification.identifier.contains("clapping") || classification.identifier.contains("hands_clap") || classification.identifier == "clapping" {
-                
-                if classification.confidence > 0.20 {
-                    print("🔍 Audio frame analyzed. Clap confidence: \(String(format: "%.2f", classification.confidence * 100))%")
-                }
-                
-                // Requirement: Confidence > 0.65 (macOS echo cancellation makes loud claps hard to detect cleanly)
-                if classification.confidence > 0.65 {
+        // Find the most confident classification for this audio frame
+        if let topClassification = classificationResult.classifications.first {
+            // Only print if it's somewhat confident so we don't spam absolute silence
+            if topClassification.confidence > 0.50 {
+                print("🎙️ HEARD: '\(topClassification.identifier)' (Confidence: \(String(format: "%.1f", topClassification.confidence * 100))%)")
+            }
+            
+            // Check if the top sound is a clap type. Sometimes it classifies a solo clap as percussion or knock.
+            let id = topClassification.identifier
+            if id.contains("clap") || id.contains("applause") || id.contains("knock") {
+                if topClassification.confidence > 0.65 {
                     registerClap()
-                    break
                 }
             }
         }
